@@ -197,6 +197,14 @@ internal class BlockWiseGameLogic(
             ),
         )
         val lastMoveScore = nextScore - state.score
+        val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
+            val blocksBonus = totalClearedBlocks * GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS
+            val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+            blocksBonus + scoreBonus
+        } else {
+            0L
+        }
+        val nextRemainingTimeMillis = state.remainingTimeMillis?.plus(awardedTimeMillis)
         val updatedChallenge = updateChallengeProgress(
             challenge = state.activeChallenge,
             rowsCleared = clearedRows.size,
@@ -276,7 +284,7 @@ internal class BlockWiseGameLogic(
                 feedbackToken = nextToken,
                 rewardedReviveUsed = state.rewardedReviveUsed,
                 nextPieceId = nextPieceId,
-                remainingTimeMillis = state.remainingTimeMillis?.plus(totalClearedBlocks * GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS),
+                remainingTimeMillis = nextRemainingTimeMillis,
                 message = when {
                     nextStatus == GameStatus.GameOver -> gameText(GameTextKey.GameMessageNoOpening)
                     totalLinesCleared > 0 -> gameText(GameTextKey.GameMessageLinesCleared, totalLinesCleared)

@@ -592,9 +592,12 @@ fun GameScreen(
         boardRect,
         cellSizePx,
         isLaunching,
+        isDragging,
     ) {
         derivedStateOf {
             val current = overlayTopLeftState.value ?: return@derivedStateOf null
+            if (isDragging) return@derivedStateOf current
+
             val snappedColumn = selectedColumn
             if (snappedColumn == null || boardRect == Rect.Zero || cellSizePx <= 0f || isLaunching) {
                 return@derivedStateOf current

@@ -71,6 +71,7 @@ import com.ugurbuga.blockgames.game.model.GridPoint
 import com.ugurbuga.blockgames.game.model.PlacementPreview
 import com.ugurbuga.blockgames.game.model.formatMergeValue
 import com.ugurbuga.blockgames.game.model.toTopLeft
+import com.ugurbuga.blockgames.ui.game.dailychallenge.ChallengeTasksDock
 import com.ugurbuga.blockgames.localization.LocalAppSettings
 import com.ugurbuga.blockgames.platform.feedback.GameHaptics
 import com.ugurbuga.blockgames.platform.feedback.NoOpGameHaptics
@@ -304,9 +305,12 @@ fun MergeShiftGameScreen(
         boardRect,
         cellSizePx,
         isLaunching,
+        isDragging,
     ) {
         derivedStateOf {
             val current = overlayTopLeftState.value ?: return@derivedStateOf null
+            if (isDragging) return@derivedStateOf current
+
             val snappedColumn = selectedColumn
             if (snappedColumn == null || boardRect == Rect.Zero || cellSizePx <= 0f || isLaunching) {
                 return@derivedStateOf current
@@ -399,6 +403,7 @@ fun MergeShiftGameScreen(
 
                         // Dock area
                         MergeShiftBottomDock(
+                            gameState = gameState,
                             modifier = Modifier
                                         .fillMaxWidth()
                                         .height(cellSize * 3f)
@@ -594,6 +599,7 @@ fun MergeShiftGameScreen(
 
 @Composable
 private fun MergeShiftBottomDock(
+    gameState: GameState,
     modifier: Modifier = Modifier,
     stylePulse: Float = 0f,
 ) {
@@ -620,14 +626,23 @@ private fun MergeShiftBottomDock(
                     ),
                 )
                 .padding(horizontal = 14.dp, vertical = 8.dp),
-            contentAlignment = Alignment.BottomCenter
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = stringResource(Res.string.launch_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                fontWeight = FontWeight.Black
-            )
+            if (gameState.activeChallenge != null) {
+                ChallengeTasksDock(
+                    challenge = gameState.activeChallenge,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                    Text(
+                        text = stringResource(Res.string.launch_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
         }
     }
 }

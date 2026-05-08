@@ -31,8 +31,10 @@ interface GameLogic {
     fun tick(state: GameState): GameState
 
     companion object {
-        const val DEFAULT_TIME_ATTACK_DURATION_MILLIS = 120_000L
-        const val TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS = 400L
+        const val DEFAULT_TIME_ATTACK_DURATION_MILLIS = 90_000L
+        const val TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS = 300L
+        const val TIME_ATTACK_SCORE_BONUS_THRESHOLD = 1_000
+        const val TIME_ATTACK_SCORE_BONUS_MILLIS = 2_000L
         const val TIME_ATTACK_REVIVE_BONUS_MILLIS = 15_000L
 
         fun create(

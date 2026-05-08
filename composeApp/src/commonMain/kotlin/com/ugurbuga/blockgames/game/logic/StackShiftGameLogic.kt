@@ -337,7 +337,9 @@ internal class StackShiftGameLogic(
         )
         val lastMoveScore = nextScore - state.score
         val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
-            resolution.totalBlocksCleared * GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS
+            val blocksBonus = resolution.totalBlocksCleared * GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS
+            val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+            blocksBonus + scoreBonus
         } else {
             0L
         }

@@ -248,7 +248,7 @@ data class GameConfig(
             GameplayStyle.BlockWise -> GameConfig(columns = 8, rows = 10)
             GameplayStyle.StackShift -> GameConfig(columns = 10, rows = 12)
             GameplayStyle.MergeShift -> GameConfig(columns = 3, rows = 5)
-            GameplayStyle.BoomBlocks -> GameConfig(columns = 6, rows = 10)
+            GameplayStyle.BoomBlocks -> GameConfig(columns = 6, rows = 8)
         }
     }
 }

@@ -89,6 +89,7 @@ import blockgames.composeapp.generated.resources.challenge_task_clear_blocks
 import blockgames.composeapp.generated.resources.challenge_task_clear_both_directions
 import blockgames.composeapp.generated.resources.challenge_task_clear_columns
 import blockgames.composeapp.generated.resources.challenge_task_clear_rows
+import blockgames.composeapp.generated.resources.challenge_task_explode_groups
 import blockgames.composeapp.generated.resources.challenge_task_perfect_placement
 import blockgames.composeapp.generated.resources.challenge_task_place_pieces
 import blockgames.composeapp.generated.resources.challenge_task_reach_score
@@ -127,8 +128,9 @@ import com.ugurbuga.blockgames.game.model.ChallengeProgress
 import com.ugurbuga.blockgames.game.model.ChallengeTask
 import com.ugurbuga.blockgames.game.model.ChallengeTaskType
 import com.ugurbuga.blockgames.game.model.DailyChallenge
-import com.ugurbuga.blockgames.game.model.paletteColor
+import com.ugurbuga.blockgames.game.model.GameplayStyle
 import com.ugurbuga.blockgames.game.model.color
+import com.ugurbuga.blockgames.game.model.paletteColor
 import com.ugurbuga.blockgames.game.model.resolveBoardBlockStyle
 import com.ugurbuga.blockgames.localization.LocalAppSettings
 import com.ugurbuga.blockgames.settings.AppSettings
@@ -706,6 +708,9 @@ fun ChallengeTaskItem(
 
 @Composable
 fun taskDescription(task: ChallengeTask): String {
+    val gameplayStyle = LocalAppSettings.current.selectedGameplayStyle
+        ?: com.ugurbuga.blockgames.platform.GlobalPlatformConfig.gameplayStyle
+
     val res = when (task.type) {
         ChallengeTaskType.ClearBlocks -> Res.string.challenge_task_clear_blocks
         ChallengeTaskType.TriggerSpecial -> Res.string.challenge_task_trigger_special
@@ -714,7 +719,13 @@ fun taskDescription(task: ChallengeTask): String {
         ChallengeTaskType.ClearRows -> Res.string.challenge_task_clear_rows
         ChallengeTaskType.ReachScore -> Res.string.challenge_task_reach_score
         ChallengeTaskType.ClearColumns -> Res.string.challenge_task_clear_columns
-        ChallengeTaskType.PlacePieces -> Res.string.challenge_task_place_pieces
+        ChallengeTaskType.PlacePieces -> {
+            if (gameplayStyle == GameplayStyle.BoomBlocks) {
+                Res.string.challenge_task_explode_groups
+            } else {
+                Res.string.challenge_task_place_pieces
+            }
+        }
         ChallengeTaskType.ClearBothDirections -> Res.string.challenge_task_clear_both_directions
     }
     return stringResource(res, task.target)
