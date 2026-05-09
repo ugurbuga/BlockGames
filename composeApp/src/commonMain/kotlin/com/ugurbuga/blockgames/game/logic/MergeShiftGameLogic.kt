@@ -2,6 +2,7 @@ package com.ugurbuga.blockgames.game.logic
 
 import com.ugurbuga.blockgames.game.model.BoardMatrix
 import com.ugurbuga.blockgames.game.model.CellTone
+import com.ugurbuga.blockgames.game.model.ChallengeTaskType
 import com.ugurbuga.blockgames.game.model.ColumnPressure
 import com.ugurbuga.blockgames.game.model.ComboState
 import com.ugurbuga.blockgames.game.model.DailyChallenge
@@ -161,6 +162,23 @@ internal class MergeShiftGameLogic(
             // Find where the result piece ended up after gravity
             val finalPoint = findPiece(mergedBoard, to.column, nextValue) ?: to
 
+            val updatedChallenge = updateChallengeProgress(
+                challenge = state.activeChallenge,
+                scoreGain = nextValue,
+                mergesCount = 1
+            )
+            val events = mutableSetOf(GameEvent.PlacementAccepted)
+            if (updatedChallenge != null && updatedChallenge.isCompleted && state.activeChallenge?.isCompleted == false) {
+                events.add(GameEvent.ChallengeCompleted)
+            }
+
+            val nextScore = state.score + nextValue
+            val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
+                val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+                val mergeBonus = GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS * 2
+                scoreBonus + mergeBonus
+            } else 0L
+
             GameMoveResult(
                 state = state.copy(
                     board = mergedBoard,
@@ -169,11 +187,13 @@ internal class MergeShiftGameLogic(
                     clearAnimationToken = state.clearAnimationToken + 1,
                     softLock = null,
                     lastPlacementColumn = preview.selectedColumn,
-                    score = state.score + nextValue,
+                    score = nextScore,
                     lastMoveScore = nextValue,
+                    activeChallenge = updatedChallenge,
+                    remainingTimeMillis = state.remainingTimeMillis?.plus(awardedTimeMillis),
                 ),
                 preview = preview,
-                events = setOf(GameEvent.PlacementAccepted),
+                events = events,
             )
         } else {
             // No merges, advance queue immediately to provide the next piece
@@ -192,6 +212,12 @@ internal class MergeShiftGameLogic(
             // Game over only when ALL columns are overflowed
             val allOverflowed = nextPressure.all { it.level == PressureLevel.Overflow }
 
+            val updatedChallenge = updateChallengeProgress(
+                challenge = state.activeChallenge,
+                scoreGain = 0,
+                mergesCount = 0
+            )
+
             GameMoveResult(
                 state = state.copy(
                     board = finalBoard,
@@ -206,6 +232,7 @@ internal class MergeShiftGameLogic(
                     lastPlacementColumn = preview.selectedColumn,
                     lastMoveScore = 0,
                     message = if (allOverflowed) gameText(GameTextKey.GameMessageNoOpening) else state.message,
+                    activeChallenge = updatedChallenge,
                 ),
                 preview = preview,
                 events = setOf(GameEvent.PlacementAccepted),
@@ -238,6 +265,23 @@ internal class MergeShiftGameLogic(
             // Find where the result piece ended up after gravity
             val finalPoint = findPiece(mergedBoard, to.column, nextValue) ?: to
 
+            val updatedChallenge = updateChallengeProgress(
+                challenge = state.activeChallenge,
+                scoreGain = nextValue,
+                mergesCount = 1
+            )
+            val events = mutableSetOf(GameEvent.PlacementAccepted)
+            if (updatedChallenge != null && updatedChallenge.isCompleted && state.activeChallenge?.isCompleted == false) {
+                events.add(GameEvent.ChallengeCompleted)
+            }
+
+            val nextScore = state.score + nextValue
+            val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
+                val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+                val mergeBonus = GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS * 2
+                scoreBonus + mergeBonus
+            } else 0L
+
             GameMoveResult(
                 state = state.copy(
                     board = mergedBoard,
@@ -246,11 +290,13 @@ internal class MergeShiftGameLogic(
                     clearAnimationToken = state.clearAnimationToken + 1,
                     softLock = null,
                     lastPlacementColumn = preview.selectedColumn,
-                    score = state.score + nextValue,
+                    score = nextScore,
                     lastMoveScore = nextValue,
+                    activeChallenge = updatedChallenge,
+                    remainingTimeMillis = state.remainingTimeMillis?.plus(awardedTimeMillis),
                 ),
                 preview = preview,
-                events = setOf(GameEvent.PlacementAccepted),
+                events = events,
             )
         } else {
             // No merges, advance queue immediately to provide the next piece
@@ -269,6 +315,12 @@ internal class MergeShiftGameLogic(
             // Game over only when ALL columns are overflowed
             val allOverflowed = nextPressure.all { it.level == PressureLevel.Overflow }
 
+            val updatedChallenge = updateChallengeProgress(
+                challenge = state.activeChallenge,
+                scoreGain = 0,
+                mergesCount = 0
+            )
+
             GameMoveResult(
                 state = state.copy(
                     board = finalBoard,
@@ -283,6 +335,7 @@ internal class MergeShiftGameLogic(
                     lastPlacementColumn = preview.selectedColumn,
                     lastMoveScore = 0,
                     message = if (allOverflowed) gameText(GameTextKey.GameMessageNoOpening) else state.message,
+                    activeChallenge = updatedChallenge,
                 ),
                 preview = preview,
                 events = setOf(GameEvent.PlacementAccepted),
@@ -292,6 +345,15 @@ internal class MergeShiftGameLogic(
 
     override fun tick(state: GameState): GameState {
         if (state.status != GameStatus.Running) return state
+
+        val nextRemainingTimeMillis = state.remainingTimeMillis?.minus(1_000L)
+        if (nextRemainingTimeMillis != null && nextRemainingTimeMillis <= 0L) {
+            return state.copy(
+                remainingTimeMillis = 0L,
+                status = GameStatus.GameOver,
+                message = gameText(GameTextKey.GameOverTitle),
+            )
+        }
 
         // If activePiece is null, we are resolving merges
         if (state.activePiece == null) {
@@ -314,12 +376,27 @@ internal class MergeShiftGameLogic(
                 // Find where the result piece ended up after gravity
                 val finalPoint = findPiece(board, to.column, nextValue) ?: to
 
+                val nextScore = state.score + nextValue
+                val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
+                    val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+                    val mergeBonus = GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS * 2
+                    scoreBonus + mergeBonus
+                } else 0L
+
+                val updatedChallenge = updateChallengeProgress(
+                    challenge = state.activeChallenge,
+                    scoreGain = nextValue,
+                    mergesCount = 1
+                )
+
                 return state.copy(
                     board = board,
                     recentlyMergedPoints = setOf(finalPoint),
                     clearAnimationToken = state.clearAnimationToken + 1,
-                    score = state.score + nextValue,
+                    score = nextScore,
                     lastMoveScore = nextValue,
+                    activeChallenge = updatedChallenge,
+                    remainingTimeMillis = state.remainingTimeMillis?.plus(awardedTimeMillis),
                 )
             } else {
                 // No more merges, advance queue
@@ -347,12 +424,35 @@ internal class MergeShiftGameLogic(
                     columnPressure = nextPressure,
                     status = if (allOverflowed) GameStatus.GameOver else GameStatus.Running,
                     recentlyMergedPoints = emptySet(),
-                    message = if (allOverflowed) gameText(GameTextKey.GameMessageNoOpening) else state.message
+                    message = if (allOverflowed) gameText(GameTextKey.GameMessageNoOpening) else state.message,
+                    remainingTimeMillis = nextRemainingTimeMillis,
                 )
             }
         }
 
-        return state
+        return state.copy(
+            remainingTimeMillis = nextRemainingTimeMillis,
+        )
+    }
+
+    private fun updateChallengeProgress(
+        challenge: DailyChallenge?,
+        scoreGain: Int,
+        mergesCount: Int
+    ): DailyChallenge? {
+        if (challenge == null) return null
+
+        val updatedTasks = challenge.tasks.map { task ->
+            val progressGain = when (task.type) {
+                ChallengeTaskType.ReachScore -> scoreGain
+                ChallengeTaskType.PlacePieces -> 1
+                ChallengeTaskType.ClearBlocks -> mergesCount
+                else -> 0
+            }
+            task.copy(current = task.current + progressGain)
+        }
+
+        return challenge.copy(tasks = updatedTasks)
     }
 
     private fun getTargetConfig(board: BoardMatrix, baseConfig: GameConfig): GameConfig {

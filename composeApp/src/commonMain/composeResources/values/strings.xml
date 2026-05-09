@@ -183,6 +183,7 @@
     <string name="challenge_task_chain_reaction">Create %1$d chain reactions</string>
     <string name="challenge_task_clear_columns">Clear %1$d columns</string>
     <string name="challenge_task_place_pieces">Place %1$d pieces</string>
+    <string name="challenge_task_explode_groups">Explode %1$d block groups</string>
     <string name="challenge_task_clear_both_directions">Make %1$d row + column clears</string>
     <string name="month_january">January</string>
     <string name="month_february">February</string>

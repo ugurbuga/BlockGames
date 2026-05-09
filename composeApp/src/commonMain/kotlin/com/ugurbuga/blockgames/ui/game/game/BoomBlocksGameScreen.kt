@@ -34,7 +34,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -60,6 +60,7 @@ import com.ugurbuga.blockgames.ui.game.GameOverDialog
 import com.ugurbuga.blockgames.ui.game.InteractiveOnboardingCompletionDialog
 import com.ugurbuga.blockgames.ui.game.MinimalTopBar
 import com.ugurbuga.blockgames.ui.game.boardCellCornerRadiusPx
+import com.ugurbuga.blockgames.ui.game.dailychallenge.ChallengeTasksDock
 import com.ugurbuga.blockgames.ui.game.drawCellBody
 import com.ugurbuga.blockgames.ui.game.onboarding.BoomBlocksInteractiveGameOnboardingOverlay
 import com.ugurbuga.blockgames.ui.game.onboarding.BoomBlocksInteractiveGameOnboardingUi
@@ -213,7 +214,15 @@ fun BoomBlocksGameScreen(
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.height(64.dp))
+
+                if (gameState.activeChallenge != null) {
+                    ChallengeTasksDock(
+                        challenge = gameState.activeChallenge,
+                        modifier = Modifier.fillMaxWidth().height(64.dp)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(64.dp))
+                }
             }
 
             if (interactiveOnboardingScene != null) {
@@ -439,16 +448,16 @@ internal fun GameGrid(
         }
     }
 
-    val explodableCells = remember(board) {
+    val explodableGroups = remember(board) {
         val visited = mutableSetOf<GridPoint>()
-        val result = mutableSetOf<GridPoint>()
+        val result = mutableListOf<Set<GridPoint>>()
         for (row in 0 until board.rows) {
             for (col in 0 until board.columns) {
                 val point = GridPoint(col, row)
                 if (point !in visited) {
                     val group = findConnectedGroup(board, point)
                     if (group.size >= 3) {
-                        result.addAll(group)
+                        result.add(group)
                     }
                     visited.addAll(group)
                 }
@@ -457,82 +466,88 @@ internal fun GameGrid(
         result
     }
 
+    val explodableCells = remember(explodableGroups) {
+        explodableGroups.flatten().toSet()
+    }
+
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val cellWidth = size.width / board.columns
         val cellHeight = size.height / board.rows
-        
-        visualBlocks.forEach { block ->
-            val progress = animationProgress.value
-            val currentRow = block.sourceRow + (block.targetRow - block.sourceRow) * progress
-            val currentCol = block.sourceCol + (block.targetCol - block.sourceCol) * progress
 
-            val isExplodable = GridPoint(block.targetCol, block.targetRow) in explodableCells
-            val hintOffset = ((block.targetCol * 0.13f) + (block.targetRow * 0.07f)) % 1f
-            val cellHintPhase = (hintPhase + hintOffset) % 1f
-            val shimmer = ((sin(cellHintPhase * 2.0 * PI).toFloat()) + 1f) / 2f
-            val scale = if (hintEnabled && isExplodable) 1.02f + (0.04f * shimmer) else 1f
-            val drawSize = cellWidth * 0.92f * scale
-            val offsetX = (cellWidth - drawSize) / 2
-            val offsetY = (cellHeight - drawSize) / 2
-            val blockTopLeft = Offset(
-                x = currentCol * cellWidth + offsetX,
-                y = currentRow * cellHeight + offsetY,
-            )
+        clipRect {
+            visualBlocks.forEach { block ->
+                val progress = animationProgress.value
+                val currentRow = block.sourceRow + (block.targetRow - block.sourceRow) * progress
+                val currentCol = block.sourceCol + (block.targetCol - block.sourceCol) * progress
 
-            if (hintEnabled && isExplodable) {
-                val haloInset = drawSize * 0.08f
-                val haloSize = Size(
-                    width = drawSize + (haloInset * (1.2f + shimmer)),
-                    height = drawSize + (haloInset * (1.2f + shimmer)),
+                val isExplodable = GridPoint(block.targetCol, block.targetRow) in explodableCells
+                val hintOffset = ((block.targetCol * 0.13f) + (block.targetRow * 0.07f)) % 1f
+                val cellHintPhase = (hintPhase + hintOffset) % 1f
+                val shimmer = ((sin(cellHintPhase * 2.0 * PI).toFloat()) + 1f) / 2f
+                val scale = if (hintEnabled && isExplodable) 1.02f + (0.04f * shimmer) else 1f
+                val drawSize = cellWidth * 0.92f * scale
+                val offsetX = (cellWidth - drawSize) / 2
+                val offsetY = (cellHeight - drawSize) / 2
+                val blockTopLeft = Offset(
+                    x = currentCol * cellWidth + offsetX,
+                    y = currentRow * cellHeight + offsetY,
                 )
-                val haloTopLeft = Offset(
-                    x = blockTopLeft.x - ((haloSize.width - drawSize) / 2f),
-                    y = blockTopLeft.y - ((haloSize.height - drawSize) / 2f),
-                )
-                drawRect(
-                    color = Color.White.copy(alpha = 0.10f + (0.14f * shimmer)),
-                    topLeft = haloTopLeft,
-                    size = haloSize,
+
+                if (hintEnabled && isExplodable) {
+                    val toneColor = block.tone.paletteColor(settings.blockColorPalette)
+                    val glowSize = drawSize * 1.12f
+                    val glowTopLeft = Offset(
+                        x = blockTopLeft.x - (glowSize - drawSize) / 2f,
+                        y = blockTopLeft.y - (glowSize - drawSize) / 2f,
+                    )
+                    val cornerRadiusPx = boardCellCornerRadiusPx(glowSize, resolvedStyle)
+                    drawRoundRect(
+                        color = toneColor.copy(alpha = 0.15f + (0.20f * shimmer)),
+                        topLeft = glowTopLeft,
+                        size = Size(glowSize, glowSize),
+                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+                    )
+                }
+
+                val cornerRadiusPx = boardCellCornerRadiusPx(drawSize, resolvedStyle)
+                drawCellBody(
+                    tone = block.tone,
+                    palette = settings.blockColorPalette,
+                    style = resolvedStyle,
+                    topLeft = blockTopLeft,
+                    size = Size(drawSize, drawSize),
+                    cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+                    pulse = stylePulse,
                 )
             }
 
-            val cornerRadiusPx = boardCellCornerRadiusPx(drawSize, resolvedStyle)
-            drawCellBody(
-                tone = block.tone,
-                palette = settings.blockColorPalette,
-                style = resolvedStyle,
-                topLeft = blockTopLeft,
-                size = Size(drawSize, drawSize),
-                cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
-                pulse = stylePulse,
-            )
-        }
-        
-        if (explosionProgress.value > 0) {
-            val alpha = explosionProgress.value
-            explodedPoints.forEach { point ->
-                val tone = explosionTones[point] ?: CellTone.Cyan
-                val toneColor = tone.paletteColor(settings.blockColorPalette)
-                val centerX = point.column * cellWidth + cellWidth / 2
-                val centerY = point.row * cellHeight + cellHeight / 2
-                
-                val radius = cellWidth * (1f - alpha) * 2.5f
-                drawCircle(
-                    color = toneColor.copy(alpha = alpha * 0.4f),
-                    radius = radius,
-                    center = Offset(centerX, centerY)
-                )
-                
-                repeat(12) { i ->
-                    val angle = (i * 30f) * (PI / 180f).toFloat()
-                    val dist = cellWidth * (1f - alpha) * 3f
-                    val sparkleX = centerX + cos(angle.toDouble()).toFloat() * dist
-                    val sparkleY = centerY + sin(angle.toDouble()).toFloat() * dist
+            if (explosionProgress.value > 0) {
+                val alpha = explosionProgress.value
+
+                explodedPoints.forEach { point ->
+                    val tone = explosionTones[point] ?: CellTone.Cyan
+                    val toneColor = tone.paletteColor(settings.blockColorPalette)
+                    val centerX = point.column * cellWidth + cellWidth / 2
+                    val centerY = point.row * cellHeight + cellHeight / 2
+
+                    val radius = cellWidth * (1f - alpha) * 2.5f
                     drawCircle(
-                        color = toneColor.copy(alpha = alpha),
-                        radius = 5.dp.toPx() * alpha,
-                        center = Offset(sparkleX, sparkleY)
+                        color = toneColor.copy(alpha = alpha * 0.4f),
+                        radius = radius,
+                        center = Offset(centerX, centerY)
                     )
+
+                    repeat(12) { i ->
+                        val angle = (i * 30f) * (PI / 180f).toFloat()
+                        val dist = cellWidth * (1f - alpha) * 3f
+                        val sparkleX = centerX + cos(angle.toDouble()).toFloat() * dist
+                        val sparkleY = centerY + sin(angle.toDouble()).toFloat() * dist
+                        drawCircle(
+                            color = toneColor.copy(alpha = alpha),
+                            radius = 5.dp.toPx() * alpha,
+                            center = Offset(sparkleX, sparkleY)
+                        )
+                    }
                 }
             }
         }

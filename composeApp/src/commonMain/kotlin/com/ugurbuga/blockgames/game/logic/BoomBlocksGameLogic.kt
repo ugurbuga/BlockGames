@@ -2,6 +2,7 @@ package com.ugurbuga.blockgames.game.logic
 
 import com.ugurbuga.blockgames.game.model.BoardMatrix
 import com.ugurbuga.blockgames.game.model.CellTone
+import com.ugurbuga.blockgames.game.model.ChallengeTaskType
 import com.ugurbuga.blockgames.game.model.DailyChallenge
 import com.ugurbuga.blockgames.game.model.FeedbackEmphasis
 import com.ugurbuga.blockgames.game.model.FloatingFeedback
@@ -170,11 +171,28 @@ internal class BoomBlocksGameLogic(
         )
         
         val nextScore = state.score + scoreGain
+        val awardedTimeMillis = if (state.gameMode == GameMode.TimeAttack) {
+            val blocksBonus = group.size * GameLogic.TIME_ATTACK_BONUS_PER_CLEARED_BLOCK_MILLIS
+            val scoreBonus = (nextScore / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD - state.score / GameLogic.TIME_ATTACK_SCORE_BONUS_THRESHOLD) * GameLogic.TIME_ATTACK_SCORE_BONUS_MILLIS
+            blocksBonus + scoreBonus
+        } else 0L
+
         val hasMoves = hasAnyExplodableGroup(finalBoard)
         val nextStatus = if (hasMoves) GameStatus.Running else GameStatus.GameOver
         
         val explodedTones = group.associateWith { point ->
             state.board.toneAt(point.column, point.row) ?: CellTone.Cyan
+        }
+
+        val updatedChallenge = updateChallengeProgress(
+            challenge = state.activeChallenge,
+            scoreGain = scoreGain,
+            blocksCleared = group.size
+        )
+        
+        val events = mutableSetOf(GameEvent.PlacementAccepted)
+        if (updatedChallenge != null && updatedChallenge.isCompleted && state.activeChallenge?.isCompleted == false) {
+            events.add(GameEvent.ChallengeCompleted)
         }
         
         return GameMoveResult(
@@ -194,10 +212,32 @@ internal class BoomBlocksGameLogic(
                     text = gameText(GameTextKey.FeedbackClear, scoreGain),
                     emphasis = FeedbackEmphasis.Bonus,
                     token = state.feedbackToken + 1
-                )
+                ),
+                activeChallenge = updatedChallenge,
+                remainingTimeMillis = state.remainingTimeMillis?.plus(awardedTimeMillis),
             ),
-            events = setOf(GameEvent.PlacementAccepted)
+            events = events
         )
+    }
+
+    private fun updateChallengeProgress(
+        challenge: DailyChallenge?,
+        scoreGain: Int,
+        blocksCleared: Int
+    ): DailyChallenge? {
+        if (challenge == null) return null
+
+        val updatedTasks = challenge.tasks.map { task ->
+            val progressGain = when (task.type) {
+                ChallengeTaskType.ClearBlocks -> blocksCleared
+                ChallengeTaskType.ReachScore -> scoreGain
+                ChallengeTaskType.PlacePieces -> 1
+                else -> 0
+            }
+            task.copy(current = task.current + progressGain)
+        }
+
+        return challenge.copy(tasks = updatedTasks)
     }
 
 
@@ -250,7 +290,20 @@ internal class BoomBlocksGameLogic(
     override fun reviveFromReward(state: GameState): GameMoveResult = invalidMove(state)
     
     override fun tick(state: GameState): GameState {
-        return state
+        if (state.status != GameStatus.Running) return state
+
+        val nextRemainingTimeMillis = state.remainingTimeMillis?.minus(1_000L)
+        if (nextRemainingTimeMillis != null && nextRemainingTimeMillis <= 0L) {
+            return state.copy(
+                remainingTimeMillis = 0L,
+                status = GameStatus.GameOver,
+                message = gameText(GameTextKey.GameOverTitle),
+            )
+        }
+
+        return state.copy(
+            remainingTimeMillis = nextRemainingTimeMillis,
+        )
     }
 
     private fun invalidMove(state: GameState): GameMoveResult = GameMoveResult(
