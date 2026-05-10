@@ -8,7 +8,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -36,27 +34,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import blockgames.composeapp.generated.resources.Res
@@ -74,9 +67,7 @@ import com.ugurbuga.blockgames.game.model.GameState
 import com.ugurbuga.blockgames.game.model.GameStatus
 import com.ugurbuga.blockgames.game.model.GridPoint
 import com.ugurbuga.blockgames.game.model.PlacementPreview
-import com.ugurbuga.blockgames.game.model.formatMergeValue
 import com.ugurbuga.blockgames.game.model.toTopLeft
-import com.ugurbuga.blockgames.ui.game.dailychallenge.ChallengeTasksDock
 import com.ugurbuga.blockgames.localization.LocalAppSettings
 import com.ugurbuga.blockgames.platform.feedback.GameHaptics
 import com.ugurbuga.blockgames.platform.feedback.NoOpGameHaptics
@@ -96,10 +87,10 @@ import com.ugurbuga.blockgames.ui.game.GameOverDialog
 import com.ugurbuga.blockgames.ui.game.GameOverDialogRevealDurationMillis
 import com.ugurbuga.blockgames.ui.game.InteractiveOnboardingCompletionDialog
 import com.ugurbuga.blockgames.ui.game.MinimalTopBar
+import com.ugurbuga.blockgames.ui.game.PieceBlocks
 import com.ugurbuga.blockgames.ui.game.RestartConfirmDialog
-import com.ugurbuga.blockgames.ui.game.boardCellCornerRadiusPx
 import com.ugurbuga.blockgames.ui.game.boardFrameCornerRadiusDp
-import com.ugurbuga.blockgames.ui.game.drawCellBody
+import com.ugurbuga.blockgames.ui.game.dailychallenge.ChallengeTasksDock
 import com.ugurbuga.blockgames.ui.game.onboarding.InteractiveOnboardingInfoCard
 import com.ugurbuga.blockgames.ui.game.onboarding.MergeShiftInteractiveGameOnboardingUi
 import com.ugurbuga.blockgames.ui.game.onboarding.MergeShiftOnboardingTargetOverlay
@@ -147,11 +138,9 @@ fun MergeShiftGameScreen(
     val coroutineScope = rememberCoroutineScope()
     val uiColors = BlockGamesThemeTokens.uiColors
     val settings = LocalAppSettings.current
-    val textMeasurer = rememberTextMeasurer()
     val updatedRestart by rememberUpdatedState(onRestart)
     val updatedRewardedRevive by rememberUpdatedState(onRewardedRevive)
 
-    val density = LocalDensity.current
     val resolvedStyle = com.ugurbuga.blockgames.game.model.resolveBoardBlockStyle(
         selectedStyle = settings.blockVisualStyle,
         mode = settings.boardBlockStyleMode,
@@ -343,6 +332,16 @@ fun MergeShiftGameScreen(
         }
     }
 
+    val visibleBoardPreview by remember(placementPreview, isDragging) {
+        derivedStateOf { placementPreview?.takeIf { isDragging } }
+    }
+    val visibleImpactedPoints by remember(impactedPoints, isDragging) {
+        derivedStateOf { if (isDragging) impactedPoints else emptySet() }
+    }
+    val visibleActiveColumn by remember(selectedColumn, isDragging) {
+        derivedStateOf { selectedColumn?.takeIf { isDragging } }
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -410,9 +409,9 @@ fun MergeShiftGameScreen(
                                     .matchParentSize()
                                     .onGloballyPositioned { boardRectInRoot = it.boundsInRoot() },
                                 gameState = gameState,
-                                preview = placementPreview,
-                                impactedPreviewCells = impactedPoints,
-                                activeColumn = selectedColumn,
+                                preview = visibleBoardPreview,
+                                impactedPreviewCells = visibleImpactedPoints,
+                                activeColumn = visibleActiveColumn,
                                 activePiece = activePiece,
                                 isDragging = isDragging,
                                 gameOverClearProgressProvider = { gameOverBoardClearProgress.value },
@@ -445,7 +444,7 @@ fun MergeShiftGameScreen(
             }
 
             LaunchGuideLineOverlay(
-                preview = placementPreview,
+                preview = visibleBoardPreview,
                 activePiece = activePiece,
                 pieceTopLeft = displayOverlayTopLeft,
                 boardRect = boardRect,
@@ -553,41 +552,11 @@ fun MergeShiftGameScreen(
                             )
                         }
                 ) {
-                    // Draw active piece
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCellBody(
-                            tone = activePiece.tone,
-                            palette = settings.blockColorPalette,
-                            style = resolvedStyle,
-                            topLeft = Offset.Zero,
-                            size = this.size,
-                            cornerRadius = CornerRadius(boardCellCornerRadiusPx(cellSizePx, resolvedStyle)),
-                            pulse = stylePulse
-                        )
-                        // Draw value
-                        val text = formatMergeValue(activePiece.value)
-                        val textStyle = TextStyle(
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = with(density) { (this@Canvas.size.width * 0.44f).toSp() },
-                            textAlign = TextAlign.Center,
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.6f),
-                                offset = Offset(2f, 2f),
-                                blurRadius = 2f
-                            )
-                        )
-                        val measuredText = textMeasurer.measure(text, textStyle)
-                        drawText(
-                            textMeasurer = textMeasurer,
-                            text = text,
-                            style = textStyle,
-                            topLeft = Offset(
-                                x = (this.size.width - measuredText.size.width) / 2f,
-                                y = (this.size.height - measuredText.size.height) / 2f
-                            )
-                        )
-                    }
+                    PieceBlocks(
+                        piece = activePiece,
+                        cellSize = with(LocalDensity.current) { cellSizePx.toDp() },
+                        pulse = stylePulse,
+                    )
                 }
             }
 

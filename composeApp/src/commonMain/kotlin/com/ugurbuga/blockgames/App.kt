@@ -128,7 +128,8 @@ private fun isUsableSavedSession(
 
 private fun resolveStartupGameplayStyle(
     loadedSettings: AppSettings,
-): GameplayStyle = loadedSettings.selectedGameplayStyle ?: GlobalPlatformConfig.gameplayStyle
+    startupGameplayStyleOverride: GameplayStyle? = null,
+): GameplayStyle = startupGameplayStyleOverride ?: loadedSettings.selectedGameplayStyle ?: GlobalPlatformConfig.gameplayStyle
 
 @Composable
 fun BlockGamesTheme(
@@ -359,13 +360,15 @@ fun App() {
 @Composable
 fun BlockGamesAppHost(
     bootstrapLogSource: String,
+    startupGameplayStyleOverride: GameplayStyle? = null,
     beforeRoot: @Composable (settings: AppSettings, canNavigateBack: Boolean, onRequestBack: () -> Unit) -> Unit = { _, _, _ -> },
 ) {
     val telemetry = rememberAppTelemetry()
-    val initialBootstrapResult = remember {
+    val initialBootstrapResult = remember(startupGameplayStyleOverride) {
         val loadedSettings = AppSettingsStorage.load()
         val startupGameplayStyle = resolveStartupGameplayStyle(
             loadedSettings = loadedSettings,
+            startupGameplayStyleOverride = startupGameplayStyleOverride,
         )
         val shouldPersistStartupGameplayStyle = loadedSettings.selectedGameplayStyle != startupGameplayStyle
         val settingsToBootstrap = if (shouldPersistStartupGameplayStyle) {

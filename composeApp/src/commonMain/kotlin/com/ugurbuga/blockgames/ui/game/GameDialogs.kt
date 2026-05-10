@@ -694,7 +694,7 @@ internal fun BlockStyleActionButton(
         enabled = enabled,
         emphasized = emphasized,
     )
-    val contentColor = textColor ?: blockStyleIconTint(style = resolvedStyle)
+    val contentColor = textColor ?: buttonColors.content
     val buttonShape = RoundedCornerShape(boardCellCornerRadiusDp(height, resolvedStyle))
 
     Box(
@@ -1136,7 +1136,6 @@ internal fun rememberActionButtonColors(
     emphasized: Boolean,
 ): ActionButtonColors {
     val uiColors = BlockGamesThemeTokens.uiColors
-    val colorScheme = MaterialTheme.colorScheme
     if (!enabled) {
         return ActionButtonColors(
             container = lerp(uiColors.actionButtonDisabled, uiColors.panelMuted, 0.16f),
@@ -1144,41 +1143,39 @@ internal fun rememberActionButtonColors(
         )
     }
 
-    val (base, accent, content) = when (tone) {
-        CellTone.Cyan, CellTone.Blue -> Triple(
-            colorScheme.primary,
-            colorScheme.secondary,
-            colorScheme.onPrimary
-        )
+    val (base, accent) = when (tone) {
+        CellTone.Cyan, CellTone.Blue ->
+            uiColors.actionPrimary to uiColors.selectionStackShift
 
-        CellTone.Violet -> Triple(
-            colorScheme.secondary,
-            colorScheme.primaryContainer,
-            colorScheme.onSecondary
-        )
+        CellTone.Violet ->
+            uiColors.actionSecondary to uiColors.selectionMergeShift
 
-        CellTone.Emerald, CellTone.Lime -> Triple(
-            uiColors.success,
-            colorScheme.primary,
-            Color.White
-        )
+        CellTone.Emerald, CellTone.Lime ->
+            uiColors.actionSuccess to uiColors.selectionBlockWise
 
-        CellTone.Gold, CellTone.Amber -> Triple(uiColors.warning, colorScheme.tertiary, Color.White)
-        CellTone.Coral, CellTone.Rose -> Triple(
-            uiColors.danger,
-            colorScheme.secondary,
-            Color.White
-        )
+        CellTone.Gold, CellTone.Amber ->
+            uiColors.actionWarning to lerp(uiColors.selectionBlockWise, uiColors.actionWarning, 0.45f)
+
+        CellTone.Coral, CellTone.Rose ->
+            uiColors.actionDanger to uiColors.selectionBoomBlocks
     }
+    val container = lerp(
+        lerp(base, accent, if (emphasized) 0.16f else 0.08f),
+        Color.White,
+        if (emphasized) 0.04f else 0.015f,
+    )
     return ActionButtonColors(
-        container = lerp(
-            lerp(base, accent, if (emphasized) 0.16f else 0.08f),
-            Color.White,
-            if (emphasized) 0.06f else 0.02f,
-        ),
-        content = content,
+        container = container,
+        content = actionButtonContentColorFor(container),
     )
 }
+
+private fun actionButtonContentColorFor(background: Color): Color =
+    if (background.red * 0.299f + background.green * 0.587f + background.blue * 0.114f > 0.62f) {
+        Color(0xFF08111F)
+    } else {
+        Color.White
+    }
 
 @Composable
 internal fun TopBarActionBlockButton(
@@ -1211,7 +1208,7 @@ internal fun TopBarActionBlockButton(
         enabled = enabled,
         emphasized = true,
     )
-    val contentTint = blockStyleIconTint(style = resolvedBlockStyle)
+    val contentTint = buttonColors.content
 
     Box(
         modifier = Modifier

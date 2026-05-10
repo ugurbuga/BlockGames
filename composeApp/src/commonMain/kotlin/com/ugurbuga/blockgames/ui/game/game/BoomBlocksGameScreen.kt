@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +76,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 private const val BOOM_BLOCKS_HINT_CYCLE_MILLIS = 1_100
+private const val BOOM_BLOCKS_HINT_IDLE_DELAY_MILLIS = 3_000L
+private const val BOOM_BLOCKS_HINT_BLINK_DURATION_MILLIS = 900L
+private const val BOOM_BLOCKS_HINT_REPEAT_INTERVAL_MILLIS = 3_000L
 private const val BOOM_BLOCKS_EXPLOSION_DURATION_MILLIS = 350
 private const val BOOM_BLOCKS_FALL_DELAY_MILLIS = 220L
 private const val BOOM_BLOCKS_FALL_DURATION_MILLIS = 450
@@ -113,7 +115,7 @@ fun BoomBlocksGameScreen(
     var currentTime by remember { mutableStateOf(currentEpochMillis()) }
     LaunchedEffect(gameState.status) {
         while (gameState.status == GameStatus.Running) {
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.delay(150)
             currentTime = currentEpochMillis()
         }
     }
@@ -142,8 +144,15 @@ fun BoomBlocksGameScreen(
         }
     }
 
-    val isIdle = gameState.status == GameStatus.Running && (currentTime - gameState.lastActionTime > 5000)
-    
+    val idleDurationMillis = (currentTime - gameState.lastActionTime).coerceAtLeast(0L)
+    val hintBlinkWindowMillis = (idleDurationMillis - BOOM_BLOCKS_HINT_IDLE_DELAY_MILLIS)
+        .takeIf { it >= 0L }
+        ?.rem(BOOM_BLOCKS_HINT_REPEAT_INTERVAL_MILLIS)
+    val showIdleHint = gameState.status == GameStatus.Running &&
+        interactiveOnboardingScene == null &&
+        hintBlinkWindowMillis != null &&
+        hintBlinkWindowMillis < BOOM_BLOCKS_HINT_BLINK_DURATION_MILLIS
+
     val infiniteTransition = rememberInfiniteTransition(label = "boomBlocks")
     val hintPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -164,6 +173,7 @@ fun BoomBlocksGameScreen(
         ),
         label = "stylePulse",
     )
+    val boardTopSpacing = if (interactiveOnboardingScene != null) 176.dp else 24.dp
 
     Box(
         modifier = modifier
@@ -201,7 +211,7 @@ fun BoomBlocksGameScreen(
                     controlsEnabled = interactiveOnboardingScene == null,
                 )
 
-                Spacer(modifier = Modifier.weight(1f).heightIn(min = 64.dp))
+                Spacer(modifier = Modifier.height(boardTopSpacing))
 
                 Box(
                     modifier = Modifier
@@ -243,7 +253,7 @@ fun BoomBlocksGameScreen(
                     GameGrid(
                         gameState = gameState,
                         modifier = Modifier.fillMaxSize(),
-                        hintEnabled = isIdle,
+                        hintEnabled = showIdleHint,
                         hintPhase = hintPhase,
                         stylePulse = stylePulse,
                     )
@@ -257,7 +267,13 @@ fun BoomBlocksGameScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(
+                    modifier = if (interactiveOnboardingScene != null) {
+                        Modifier.height(16.dp)
+                    } else {
+                        Modifier.weight(1f)
+                    }
+                )
 
                 if (gameState.activeChallenge != null) {
                     ChallengeTasksDock(
@@ -549,9 +565,13 @@ internal fun GameGrid(
                 val emphasis = when {
                     !isExplodable -> 0f
                     hintEnabled -> 1f
-                    else -> 0.45f
+                    else -> 0f
                 }
-                val scale = if (isExplodable) 1.01f + ((0.018f + (0.032f * emphasis)) * shimmer) else 1f
+                val scale = if (isExplodable && emphasis > 0f) {
+                    1.01f + ((0.018f + (0.032f * emphasis)) * shimmer)
+                } else {
+                    1f
+                }
                 val drawSize = cellWidth * 0.92f * scale
                 val offsetX = (cellWidth - drawSize) / 2
                 val offsetY = (cellHeight - drawSize) / 2
@@ -560,7 +580,7 @@ internal fun GameGrid(
                     y = currentRow * cellHeight + offsetY,
                 )
 
-                if (isExplodable) {
+                if (isExplodable && emphasis > 0f) {
                     val toneColor = block.tone.paletteColor(settings.blockColorPalette)
                     val glowSize = drawSize * (1.10f + (0.06f * emphasis))
                     val glowTopLeft = Offset(

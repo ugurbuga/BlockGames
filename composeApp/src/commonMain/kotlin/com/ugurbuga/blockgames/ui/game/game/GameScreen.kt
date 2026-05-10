@@ -22,6 +22,8 @@ import com.ugurbuga.blockgames.game.model.SpecialBlockType
 import com.ugurbuga.blockgames.platform.GlobalPlatformConfig
 import com.ugurbuga.blockgames.platform.feedback.NoOpSoundEffectPlayer
 import com.ugurbuga.blockgames.platform.feedback.SoundEffectPlayer
+import com.ugurbuga.blockgames.presentation.game.GameDispatchResult
+import com.ugurbuga.blockgames.presentation.game.GameIntent
 import com.ugurbuga.blockgames.presentation.game.GameViewModel
 import com.ugurbuga.blockgames.presentation.game.InteractionFeedback
 import com.ugurbuga.blockgames.settings.BlockWiseOnboardingStage
@@ -379,10 +381,25 @@ fun BlockGamesGameApp(
             onResolvePreviewImpact = viewModel::previewImpactPoints,
             onPlacePiece = { column ->
                 telemetry.logUserAction("place_piece_stackshift")
-                viewModel.placePieceResult(column).also { result ->
-                    val scene = stackShiftOnboardingScene
-                    if (!interactiveOnboardingEnabled || scene == null) return@also
+                val initialResult = viewModel.placePieceResult(column)
+                val result = if (
+                    interactiveOnboardingEnabled &&
+                    stackShiftOnboardingScene != null &&
+                    (GameEvent.SoftLockStarted in initialResult.events || GameEvent.SoftLockAdjusted in initialResult.events)
+                ) {
+                    val commitResult = viewModel.dispatchResult(GameIntent.CommitSoftLock)
+                    GameDispatchResult(
+                        events = initialResult.events + commitResult.events,
+                        feedback = commitResult.feedback,
+                    )
+                } else {
+                    initialResult
+                }
 
+                val scene = stackShiftOnboardingScene
+                if (!interactiveOnboardingEnabled || scene == null) {
+                    result
+                } else {
                     when {
                         GameEvent.PlacementAccepted in result.events -> {
                             onboardingAwaitingCommit = false
@@ -400,6 +417,7 @@ fun BlockGamesGameApp(
                             onboardingAdvanceRequest = null
                         }
                     }
+                    result
                 }
             },
             onHoldPiece = viewModel::holdPiece,
