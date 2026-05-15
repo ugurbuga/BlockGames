@@ -23,8 +23,6 @@ internal class BlockSortGameLogic(
 
     companion object {
         private const val EmptyColumns = 2
-        private const val BaseColumns = 6
-        private const val MaxColumns = 9
         private const val MoveScorePerBlock = 50
         private const val CompletedColumnBonus = 120
         private const val RoundClearBonusBase = 600
