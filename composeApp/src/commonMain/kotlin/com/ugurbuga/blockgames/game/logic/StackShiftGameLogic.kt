@@ -838,10 +838,10 @@ internal class StackShiftGameLogic(
         var triggeredCount = 0
         var blocksCleared = 0
         val visited = mutableSetOf<GridPoint>()
-        val queue = ArrayDeque(pendingTriggers)
+        val queue = pendingTriggers.toMutableList()
 
         while (queue.isNotEmpty()) {
-            val trigger = queue.removeFirst()
+            val trigger = queue.removeAt(0)
             if (!visited.add(trigger.point)) continue
 
             val effect = buildTriggeredEffect(resolvedBoard, trigger)
@@ -853,7 +853,7 @@ internal class StackShiftGameLogic(
             resolvedBoard = applyTriggeredEffect(resolvedBoard, effect)
             blocksCleared += (countBefore - resolvedBoard.occupiedCount)
             triggeredCount += 1
-            nextTriggers.filterNot { it.point in visited }.forEach(queue::addLast)
+            nextTriggers.filterNot { it.point in visited }.forEach(queue::add)
         }
 
         return TriggerBurstResult(
@@ -891,10 +891,10 @@ internal class StackShiftGameLogic(
         var resolvedBoard = board
         val impactedPoints = mutableSetOf<GridPoint>()
         val visited = mutableSetOf<GridPoint>()
-        val queue = ArrayDeque(pendingTriggers)
+        val queue = pendingTriggers.toMutableList()
 
         while (queue.isNotEmpty()) {
-            val trigger = queue.removeFirst()
+            val trigger = queue.removeAt(0)
             if (!visited.add(trigger.point)) continue
 
             val effect = buildTriggeredEffect(resolvedBoard, trigger)
@@ -907,7 +907,7 @@ internal class StackShiftGameLogic(
                 effect = effect,
             )
             resolvedBoard = applyTriggeredEffect(resolvedBoard, effect)
-            nextTriggers.filterNot { it.point in visited }.forEach(queue::addLast)
+            nextTriggers.filterNot { it.point in visited }.forEach(queue::add)
         }
 
         return PreviewImpactResult(
